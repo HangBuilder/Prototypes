@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["video_sha256", "segments"],
+  "properties": {
+    "video_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "segments": {"type": "array", "items": {"$ref": "#/$defs/segment"}}
+  },
+  "$defs": {
+    "time": {"type": "number", "minimum": 0},
+    "state": {"enum": ["machine_proposed", "user_reviewed", "instructor_verified", "rejected"]},
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["basis", "start", "end", "reference", "excerpt"],
+      "properties": {
+        "basis": {"enum": ["spoken", "visual"]},
+        "start": {"$ref": "#/$defs/time"}, "end": {"$ref": "#/$defs/time"},
+        "reference": {"type": "string", "minLength": 1}, "excerpt": {"type": "string", "minLength": 1}
+      }
+    },
+    "claim": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "content", "basis", "review_status", "evidence"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["grip", "starting_condition", "opponent_cue", "execution_step", "essential_detail", "mistake", "failure_condition", "counter", "follow_up"]},
+        "content": {"type": "string", "minLength": 1},
+        "basis": {"enum": ["spoken", "visual", "inferred", "unsupported"]},
+        "step_index": {"type": "integer", "minimum": 1},
+        "review_status": {"$ref": "#/$defs/state"},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}
+      }
+    },
+    "segment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "start", "end", "candidate_techniques", "candidate_positions", "perspectives", "intents", "attire", "review_status", "claims"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "start": {"$ref": "#/$defs/time"}, "end": {"$ref": "#/$defs/time"},
+        "candidate_techniques": {"type": "array", "items": {"type": "string"}},
+        "candidate_positions": {"type": "array", "items": {"type": "string"}},
+        "perspectives": {"type": "array", "uniqueItems": true, "items": {"enum": ["top", "bottom", "standing", "unknown"]}},
+        "intents": {"type": "array", "uniqueItems": true, "items": {"enum": ["offense", "defense", "counter", "unknown"]}},
+        "attire": {"enum": ["gi", "no_gi", "unknown"]},
+        "review_status": {"$ref": "#/$defs/state"},
+        "claims": {"type": "array", "items": {"$ref": "#/$defs/claim"}}
+      }
+    }
+  }
+}

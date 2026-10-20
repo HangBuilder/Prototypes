@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bjj-coach-poc"
+version = "0.1.0"
+description = "Local, evidence-first jiu-jitsu video review proof of concept"
+requires-python = ">=3.11"
+dependencies = ["jsonschema==4.25.1"]
+
+[project.optional-dependencies]
+cpu = ["faster-whisper==1.2.1"]
+mac = ["mlx-whisper==0.4.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+
+[project.scripts]
+bjj-coach = "bjj_coach.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["bjj_coach*"]
+
+[tool.setuptools.package-data]
+bjj_coach = ["*.html", "*.json"]
