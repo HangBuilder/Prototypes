@@ -8,7 +8,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit
 
-from .pipeline import artifacts_valid, now, read_json, validate_claims, write_json
+from .pipeline import artifacts_valid, now, read_json, validate_claims, write_json, sha256
 
 
 def serve(root, port=8765):
@@ -16,6 +16,12 @@ def serve(root, port=8765):
     manifest = read_json(root / "manifest.json")
     token = secrets.token_urlsafe(32)
     lock = threading.Lock()
+
+    def has_enhanced_video():
+        current = read_json(root / "manifest.json")
+        record = current["stages"].get("enhanced_video")
+        return bool(artifacts_valid(root, record) and (root / "enhanced.wav").is_file()
+                    and record["settings"]["audio_sha256"] == sha256(root / "enhanced.wav"))
 
     def snapshot():
         current = read_json(root / "manifest.json")
@@ -26,7 +32,8 @@ def serve(root, port=8765):
         corrections = read_json(root / "corrections.json") if (root / "corrections.json").exists() else []
         claims = read_json(root / "reviewed-claims.json") if (root / "reviewed-claims.json").exists() else read_json(root / "claims.json")
         return {"token": token, "manifest": current, "transcripts": transcripts, "claims": claims,
-                "frames": read_json(root / "frames.json"), "corrections": corrections}
+                "frames": read_json(root / "frames.json"), "corrections": corrections,
+                "enhanced_video_available": has_enhanced_video()}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
@@ -52,6 +59,8 @@ def serve(root, port=8765):
                 return self.reply(200, snapshot())
             allowed = {"/": Path(__file__).with_name("review.html"),
                        "/video": root / "preview.mp4" if (root / "preview.mp4").exists() else Path(manifest["source_path"])}
+            if path == "/enhanced-video.mp4" and has_enhanced_video():
+                allowed[path] = root / "enhanced-video.mp4"
             for variant in ("reference", "baseline", "enhanced"):
                 allowed[f"/{variant}.wav"] = root / f"{variant}.wav"
             for frame in read_json(root / "frames.json"):

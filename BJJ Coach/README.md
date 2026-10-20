@@ -154,6 +154,25 @@ but may still hurt speech; no benefit has been established. Compare difficult
 passages by human listening. Two matching outputs are not proof of correctness.
 Do not invent words that remain inaudible.
 
+## Video with enhanced audio
+
+Export a separate browser-compatible MP4 with the enhanced audio track:
+
+```sh
+.venv/bin/python -m bjj_coach.cli preview "$BJJ_RUN" --audio enhanced
+```
+
+This creates `enhanced-video.mp4` in the run directory and generates enhanced audio
+if needed. The original stays unchanged. The export uses H.264 video and AAC audio;
+its enhanced mono track is aligned to the same timeline as transcript timestamps.
+If the audio ends early, silence is padded so the video is not cut short. Repeated
+exports reuse valid output unless source/audio/settings change.
+
+Start or restart the review server below, then refresh your browser. Use the
+**Video audio** dropdown to switch between original and enhanced playback without
+losing your position. **Download video with enhanced audio** saves the MP4 to your
+Mac. If no export exists, the enhanced option is disabled.
+
 ## Review and correct
 
 ```sh

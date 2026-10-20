@@ -155,6 +155,34 @@ def enhance(root):
             root / "baseline.wav", "-af", ENHANCEMENT, "-ar", "16000", "-c:a", "pcm_s16le", root / "enhanced.wav"]))
 
 
+def enhanced_video(root):
+    """Export aligned enhanced audio with browser-compatible video; keep originals."""
+    root = Path(root)
+    manifest = read_json(root / "manifest.json")
+    source = Path(manifest["source_path"])
+    if sha256(source) != manifest["source_sha256"]:
+        raise ValueError("Source changed since extraction")
+    enhance(root)
+    manifest = read_json(root / "manifest.json")
+    settings = {"source": manifest["source_sha256"], "audio_sha256": sha256(root / "enhanced.wav"),
+                "codec": "h264/aac", "crf": 23, "duration": manifest["duration"],
+                "alignment": "enhanced audio already on video-relative timeline; pad silence to video end"}
+    target = root / "enhanced-video.mp4"
+    temporary = root / "enhanced-video.partial.mp4"
+    def export():
+        try:
+            run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", source,
+                 "-i", root / "enhanced.wav", "-map", "0:v:0", "-map", "1:a:0",
+                 "-c:v", "libx264", "-threads", "2", "-crf", "23", "-pix_fmt", "yuv420p",
+                 "-c:a", "aac", "-af", "apad", "-t", str(manifest["duration"]),
+                 "-movflags", "+faststart", temporary])
+            temporary.replace(target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    stage(root, manifest, "enhanced_video", settings, [target.name], export)
+    return target
+
+
 def subtitle_time(seconds):
     milliseconds = round(seconds * 1000)
     hours, milliseconds = divmod(milliseconds, 3600000)

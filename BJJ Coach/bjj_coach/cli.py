@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from .pipeline import prepare, enhance, transcribe, validate_claims, read_json, stage, run, sha256
+from .pipeline import prepare, enhance, enhanced_video, transcribe, validate_claims, read_json, stage, run, sha256
 
 
 def main():
@@ -19,6 +19,8 @@ def main():
         p.add_argument("run", type=Path)
         if name == "review":
             p.add_argument("--port", type=int, default=8765)
+        elif name == "preview":
+            p.add_argument("--audio", choices=("original", "enhanced"), default="original")
         elif name == "transcribe":
             p.add_argument("--variant", choices=("baseline", "enhanced"), default="baseline")
             p.add_argument("--backend", choices=("mlx", "faster-whisper"), default="faster-whisper")
@@ -40,6 +42,9 @@ def main():
             from .review import serve
             serve(args.run, args.port)
         elif args.command == "preview":
+            if args.audio == "enhanced":
+                print(enhanced_video(args.run))
+                return
             manifest = read_json(args.run / "manifest.json")
             source = Path(manifest["source_path"])
             if sha256(source) != manifest["source_sha256"]:

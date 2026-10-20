@@ -105,6 +105,17 @@ class PipelineTests(unittest.TestCase):
     def test_subtitle_carry(self):
         self.assertEqual(subtitle_time(59.9999), '00:01:00,000')
 
+    def test_enhanced_video_export_preserves_duration_and_resumes(self):
+        from bjj_coach.pipeline import enhanced_video, probe
+        target = enhanced_video(self.root)
+        metadata = probe(target)
+        self.assertEqual([s['codec_name'] for s in metadata['streams']], ['h264', 'aac'])
+        self.assertAlmostEqual(float(metadata['format']['duration']), 2, places=1)
+        self.assertEqual(sha256(self.source), self.original_hash)
+        first = read_json(self.root / 'manifest.json')['stages']['enhanced_video']
+        enhanced_video(self.root)
+        self.assertEqual(first, read_json(self.root / 'manifest.json')['stages']['enhanced_video'])
+
     def test_audio_offset_is_padded_on_video_timeline(self):
         source = self.base / 'offset.mov'
         subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i',
@@ -116,6 +127,14 @@ class PipelineTests(unittest.TestCase):
         self.assertAlmostEqual(manifest['audio_alignment']['reference_offset_seconds'], .5, places=2)
         with wave.open(str(root / 'baseline.wav')) as audio:
             self.assertEqual(audio.readframes(6400), b'\x00' * 12800)
+        from bjj_coach.pipeline import enhanced_video, probe, run
+        target = enhanced_video(root)
+        self.assertAlmostEqual(float(probe(target)['format']['duration']), 2, places=1)
+        decoded = self.base / 'export-audio.wav'
+        run(['ffmpeg', '-nostdin', '-loglevel', 'error', '-y', '-i', target,
+             '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', decoded])
+        with wave.open(str(decoded)) as audio:
+            self.assertEqual(audio.readframes(4800), b'\x00' * 9600)
 
     def test_transcription_adapter_exports_and_resumes_synthetic_response(self):
         # No inference: verify only adapter conversion, exports, flags, and cache contract.
@@ -186,6 +205,15 @@ class PipelineTests(unittest.TestCase):
             connection.request('GET', '/')
             response = connection.getresponse()
             self.assertIn(b'Review the evidence', response.read())
+            from bjj_coach.pipeline import enhanced_video
+            enhanced_video(self.root)
+            connection.request('GET', '/api/state')
+            response = connection.getresponse()
+            self.assertTrue(json.loads(response.read())['enhanced_video_available'])
+            connection.request('GET', '/enhanced-video.mp4', headers={'Range': 'bytes=0-31'})
+            response = connection.getresponse()
+            self.assertEqual(response.status, 206)
+            self.assertEqual(response.read(), (self.root / 'enhanced-video.mp4').read_bytes()[:32])
             connection.request('GET', '/video', headers={'Range': 'bytes=0-31'})
             response = connection.getresponse()
             self.assertEqual(response.status, 206)
