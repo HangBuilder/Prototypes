@@ -8,13 +8,30 @@ There is no hosted service, paid API, automatic coaching, or footage upload.
 
 Python 3.11+ and `ffmpeg`/`ffprobe` on PATH are required. Use this existing checkout;
 no worktree is needed. Commands below run from the `BJJ Coach` project directory.
+On your Mac, start each Terminal session with:
 
 ```sh
-python3 -m venv .venv
+cd "/Users/hangea/Documents/AI explorations/BJJ Coach/Prototypes/BJJ Coach"
+```
+
+All processing commands use `.venv/bin/python -m bjj_coach.cli` directly. This
+avoids the `bjj-coach` launcher that failed to import the package on your Mac.
+The current working directory must contain `bjj_coach/` and `.venv/`.
+
+```sh
+python3.12 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 # Apple Silicon Mac (MLX); see the Linux alternative below.
 python -m pip install -e '.[mac]'
 ```
+
+Use Python 3.12 rather than Apple's Python 3.9. If the universal installer's
+Python is not on PATH, create the environment with
+`/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12 -m venv .venv`.
+If `.venv` already uses an older Python, deactivate it if active and rename it
+before creating the new environment; installing Python does not upgrade an
+existing virtual environment. Verify with `.venv/bin/python --version`.
 
 On Linux/Intel, instead install `python -m pip install -e '.[cpu]'` for CPU/int8
 faster-whisper. Top-level dependencies are pinned in `pyproject.toml`;
@@ -24,8 +41,10 @@ Linux environment, install that file first, then `python -m pip install -e .`.
 
 Before processing on a Mac, inspect `uname -m`, `sw_vers`, `sysctl -n hw.memsize`,
 `df -h .`, `python3 --version`, and `ffmpeg -version`. MLX requires macOS/arm64.
-Start with `mlx-community/whisper-tiny` for a short trial, then select a larger
-model only after listening and checking time/memory. The M4 Mac's RAM and OS have
+The default Mac workflow below uses `mlx-community/whisper-large-v3-mlx`, which
+produced substantially better transcripts in your local trial. It downloads
+several GB on first use and requires more memory than tiny/small; close other
+memory-heavy apps and watch memory pressure. Smaller models remain optional. The M4 Mac's RAM and OS have
 not been inspected from this Linux cloud machine. Do not install system packages
 blindly: if FFmpeg is missing on a Mac with Homebrew, `brew install ffmpeg` changes
 the system tool installation; review that command before running it yourself.
@@ -39,14 +58,37 @@ Model identifiers without a revision can change remotely.
 
 ## Process your recording
 
-Keep originals outside Git, e.g. in ignored `data/`. No path is hard-coded:
+Keep originals outside Git, e.g. in ignored `data/`. To process a new video on
+macOS, select it with the file picker and capture its output directory:
 
 ```sh
-bjj-coach prepare '/path/to/IMG_6970.MOV' --output runs
+BJJ_VIDEO="$(osascript -e 'POSIX path of (choose file with prompt "Choose your new video")')"
+
+BJJ_RUN="$(.venv/bin/python -m bjj_coach.cli prepare "$BJJ_VIDEO" --output runs)"
+
+printf 'Run directory: %s\n' "$BJJ_RUN"
 ```
 
-The command prints a run directory named after the source SHA-256. Use that path
-in place of `runs/HASH` below. `metadata.json` retains the complete ffprobe report
+Stop if extraction reports an error. If `ffmpeg` is missing, install it with
+`brew install ffmpeg` (requires Homebrew), verify `ffmpeg -version` and
+`ffprobe -version`, then retry extraction. The file picker is Mac-only; on Linux
+assign `BJJ_VIDEO="/path/to/video.mov"` before running the preparation command.
+
+The command prints a run directory named after the source SHA-256 fingerprint.
+`HASH` is a placeholder for that generated folder name, not text to type literally.
+`BJJ_RUN` captures the real path and stays set only in the current Terminal session.
+For another video, repeat the file picker and preparation commands above.
+
+If you open a new Terminal, return to the project folder, run `ls -d runs/*/`, and
+assign the desired full path (use no `$` on the left side):
+
+```sh
+# Example from the first recording; choose your new recording's path as needed.
+BJJ_RUN="runs/2aaed35d39a70449f128110468625abc6eae91598938b344c4b6192f0df3fa8b"
+```
+
+Always quote `"$BJJ_RUN"` when passing it to a command; paths may contain spaces.
+ `metadata.json` retains the complete ffprobe report
 (codecs, channel layout/rate, rotation, embedded candidate dates/location).
 `manifest.json` records source hash, confirmed metadata (initially null), stage
 settings, tool versions, timing, failures, and artifact hashes. The original is
@@ -67,11 +109,23 @@ Sparse frames use FFmpeg autorotation, a default 30-second interval, and a cap o
 60 frames. Override with `--frame-interval 5 --max-frames 100` for review; frames do
 not establish motion. Full-video clips around ambiguity remain a manual step.
 
+Transcribe the **entire video** on your Apple Silicon Mac:
+
 ```sh
-# On your Apple Silicon Mac: sample BEFORE full inference.
-bjj-coach transcribe runs/HASH --backend mlx --model mlx-community/whisper-tiny --sample-seconds 30
-# Linux equivalent:
-bjj-coach transcribe runs/HASH --backend faster-whisper --model tiny --sample-seconds 30
+.venv/bin/python -m bjj_coach.cli transcribe "$BJJ_RUN" \
+  --backend mlx \
+  --model mlx-community/whisper-large-v3-mlx \
+  --language en
+```
+
+No `--sample-seconds` option is needed for full-video processing. For an optional
+short trial on a longer recording, add `--sample-seconds 30`.
+
+Linux CPU alternative (smaller model):
+
+```sh
+.venv/bin/python -m bjj_coach.cli transcribe "$BJJ_RUN" \
+  --backend faster-whisper --model tiny --language en
 ```
 
 Language defaults to English; use `--language` if needed. No word timings or
@@ -80,15 +134,18 @@ is disabled; settings and optional `--prompt` glossary are recorded. Keep the
 initial baseline free of glossary bias. Sample runs cover the beginning of the
 recording; the review page can inspect difficult spans throughout a full run.
 
-After listening to the sample, omit `--sample-seconds` to transcribe the full
-file. A different settings hash creates a separate ASR run instead of overwriting
+A different settings hash creates a separate ASR run instead of overwriting
 an earlier one. Outputs: `.raw.json`, normalized timestamped `.json`, `.txt`, and
 `.srt`. Silence and low-score flags prompt review; they are not accuracy scores.
 
 ```sh
 # Optional candidate; evaluate before accepting the filter for your gym audio.
-bjj-coach enhance runs/HASH
-bjj-coach transcribe runs/HASH --backend mlx --model mlx-community/whisper-tiny --variant enhanced
+.venv/bin/python -m bjj_coach.cli enhance "$BJJ_RUN"
+.venv/bin/python -m bjj_coach.cli transcribe "$BJJ_RUN" \
+  --backend mlx \
+  --model mlx-community/whisper-large-v3-mlx \
+  --language en \
+  --variant enhanced
 # Use the SAME backend/model/revision/language/prompt/sample options as baseline.
 ```
 
@@ -101,11 +158,13 @@ Do not invent words that remain inaudible.
 
 ```sh
 # Optional if the original MOV codec will not play in your browser:
-bjj-coach preview runs/HASH
-bjj-coach review runs/HASH --port 8765
+.venv/bin/python -m bjj_coach.cli preview "$BJJ_RUN"
+.venv/bin/python -m bjj_coach.cli review "$BJJ_RUN" --port 8765
 ```
 
-Open your **local machine's** browser at loopback port 8765. The server binds only
+Open `http://127.0.0.1:8765` in your Mac's browser once the server starts.
+Keep that Terminal running; press Control-C to stop it before running another
+processing command in the same Terminal. The server binds only
 to 127.0.0.1 and is intended for one trusted local user. Cloud onboarding does not
 provide a user-facing localhost preview. The UI includes video seeking, audio
 comparison, timestamped transcript edits, unclear flags, frames, and a structured
@@ -122,8 +181,8 @@ visual claims require a timestamped frame. Inferences and unsupported claims mus
 be labeled. Structural validation does not prove a claim is true.
 
 ```sh
-bjj-coach validate runs/HASH
-python -m unittest discover -s tests -v
+.venv/bin/python -m bjj_coach.cli validate "$BJJ_RUN"
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
 Use the review editor's Validate & save button for reviewed claims; the CLI
@@ -140,9 +199,10 @@ human corrections; deleting caches/derived output can delete that local work.
 
 ## Status and limits
 
-See [POC_FINDINGS.md](POC_FINDINGS.md) for measured results and blockers. No actual
-IMG_6970.MOV metadata, transcript, visual interpretation, or audio comparison has
-been produced. The cloud attachment exceeds the available 32 MiB transfer limit;
+See [POC_FINDINGS.md](POC_FINDINGS.md) for the initial cloud validation results and
+blockers. You subsequently ran transcription on your Mac and reported substantially
+better results with large-v3. No transcript accuracy or visual technique analysis
+has been independently validated here. The cloud attachment exceeds the available 32 MiB transfer limit;
 the Mac can process the original directly using its local path. Cloud model
 retrieval was separately blocked by a network proxy 403 for Hugging Face.
 
