@@ -8,6 +8,13 @@ from .pipeline import prepare, enhance, enhanced_video, transcribe, validate_cla
 def main():
     parser = argparse.ArgumentParser(description="BJJ Coach — local video evidence PoC")
     commands = parser.add_subparsers(dest="command", required=True)
+    p = commands.add_parser("class-create", help="Group processed videos from one class")
+    p.add_argument("file", type=Path)
+    p.add_argument("--title", required=True)
+    p.add_argument("--runs", nargs="+", type=Path, required=True)
+    p = commands.add_parser("class-review", help="Link technical details across class videos")
+    p.add_argument("file", type=Path)
+    p.add_argument("--port", type=int, default=8765)
     p = commands.add_parser("prepare", help="Probe, extract reference/mono audio, and sparse rotated frames")
     p.add_argument("input", type=Path)
     p.add_argument("--output", type=Path, default=Path("runs"))
@@ -31,7 +38,15 @@ def main():
             p.add_argument("--sample-seconds", type=float)
     args = parser.parse_args()
     try:
-        if args.command == "prepare":
+        if args.command == "class-create":
+            from .classes import create_class
+            print(create_class(args.file, args.runs, args.title))
+        elif args.command == "class-review":
+            from .classes import validate_class
+            from .review import serve
+            document = validate_class(read_json(args.file))
+            serve(Path(document['videos'][0]['run_path']), args.port, args.file.resolve())
+        elif args.command == "prepare":
             print(prepare(args.input, args.output, args.audio_stream, args.frame_interval, args.max_frames))
         elif args.command == "enhance":
             enhance(args.run)

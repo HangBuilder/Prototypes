@@ -11,7 +11,7 @@ from urllib.parse import unquote, urlsplit
 from .pipeline import artifacts_valid, now, read_json, validate_claims, write_json, sha256
 
 
-def serve(root, port=8765):
+def serve(root, port=8765, class_file=None):
     root = Path(root).resolve()
     manifest = read_json(root / "manifest.json")
     token = secrets.token_urlsafe(32)
@@ -55,10 +55,23 @@ def serve(root, port=8765):
             if not self.acceptable_host():
                 return self.reply(403, {"error": "Loopback host required"})
             path = unquote(urlsplit(self.path).path)
+            if path == "/api/class" and class_file:
+                from .classes import class_snapshot
+                return self.reply(200, {**class_snapshot(class_file), "token": token})
             if path == "/api/state":
                 return self.reply(200, snapshot())
             allowed = {"/": Path(__file__).with_name("review.html"),
                        "/video": root / "preview.mp4" if (root / "preview.mp4").exists() else Path(manifest["source_path"])}
+            if class_file:
+                allowed["/"] = Path(__file__).with_name("class.html")
+                for video in read_json(class_file)["videos"]:
+                    video_root = Path(video["run_path"])
+                    video_manifest = read_json(video_root / "manifest.json")
+                    base = f"/class/videos/{video['id']}"
+                    allowed[base + "/original"] = video_root / "preview.mp4" if (video_root / "preview.mp4").is_file() else Path(video_manifest["source_path"])
+                    record = video_manifest['stages'].get('enhanced_video')
+                    if path == base + "/enhanced" and artifacts_valid(video_root, record) and (video_root / 'enhanced.wav').is_file() and record['settings']['audio_sha256'] == sha256(video_root / 'enhanced.wav'):
+                        allowed[path] = video_root / 'enhanced-video.mp4'
             if path == "/enhanced-video.mp4" and has_enhanced_video():
                 allowed[path] = root / "enhanced-video.mp4"
             for variant in ("reference", "baseline", "enhanced"):
@@ -125,7 +138,11 @@ def serve(root, port=8765):
                 if not 0 < length <= 1024 * 1024:
                     raise ValueError("Body must be 1–1048576 bytes")
                 body = json.loads(self.rfile.read(length))
-                if urlsplit(self.path).path == "/api/corrections":
+                if urlsplit(self.path).path == "/api/class" and class_file:
+                    from .classes import save_class
+                    with lock:
+                        save_class(class_file, body)
+                elif urlsplit(self.path).path == "/api/corrections":
                     if set(body) != {"target", "text", "unclear"} or not isinstance(body["text"], str) or not isinstance(body["unclear"], bool):
                         raise ValueError("Expected target, text, unclear")
                     state = snapshot()

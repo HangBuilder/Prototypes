@@ -11,3 +11,5 @@ models/
 *.mp4
 *.wav
 *.m4a
+
+classes/

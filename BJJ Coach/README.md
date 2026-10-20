@@ -216,6 +216,82 @@ remains historical with its input hash. Do not change frames after attaching
 visual claims without re-reviewing those claims. Preserve `runs/` backups to retain
 human corrections; deleting caches/derived output can delete that local work.
 
+## Compare a technical detail across two class videos
+
+The class review page implements **technique → technical detail → linked moments**.
+This is a manual two-video experiment, not automatic cross-video matching.
+Existing single-video review, machine transcripts, and corrections stay intact.
+
+Start from the project directory with the review server stopped (Control-C).
+Select the two original videos in class teaching order. Preparation reuses valid
+outputs for videos already processed:
+
+```sh
+BJJ_VIDEO_1="$(osascript -e 'POSIX path of (choose file with prompt "Choose the FIRST video from the class")')"
+BJJ_RUN_1="$(.venv/bin/python -m bjj_coach.cli prepare "$BJJ_VIDEO_1" --output runs)"
+
+BJJ_VIDEO_2="$(osascript -e 'POSIX path of (choose file with prompt "Choose the SECOND video from the same class")')"
+BJJ_RUN_2="$(.venv/bin/python -m bjj_coach.cli prepare "$BJJ_VIDEO_2" --output runs)"
+```
+
+Stop if either preparation fails. If these recordings do not already have full
+transcripts, transcribe each using the earlier large-v3 command. For example:
+
+```sh
+.venv/bin/python -m bjj_coach.cli transcribe "$BJJ_RUN_1" --backend mlx --model mlx-community/whisper-large-v3-mlx --language en
+.venv/bin/python -m bjj_coach.cli transcribe "$BJJ_RUN_2" --backend mlx --model mlx-community/whisper-large-v3-mlx --language en
+```
+
+Create compatible original-audio previews, then register the class once:
+
+```sh
+.venv/bin/python -m bjj_coach.cli preview "$BJJ_RUN_1"
+.venv/bin/python -m bjj_coach.cli preview "$BJJ_RUN_2"
+
+.venv/bin/python -m bjj_coach.cli class-create classes/two-video-trial.json \
+  --title "Two-video class trial" --runs "$BJJ_RUN_1" "$BJJ_RUN_2"
+
+.venv/bin/python -m bjj_coach.cli class-review classes/two-video-trial.json --port 8765
+```
+
+Open `http://127.0.0.1:8765` and refresh if the single-video page is cached.
+The class file must not already exist when creating it. To resume a saved trial,
+run only `class-review`; no need to select or reprocess the videos again.
+
+1. Add a technique, for example **Guard pull**.
+2. Add a technical detail, for example **Control hands before bringing legs in**.
+   Enter any conditions separately rather than treating a conditional detail as universal.
+3. Choose video 1 and the desired transcript run. Click **Use this span** to copy
+   its timestamps, stable transcript reference, and spoken quote into the link form.
+4. Choose a teaching role (initial explanation, correction, repetition, variation,
+   exception, or follow-up), add notes, and save the linked moment.
+5. Select video 2, find the relevant span, and attach it to the **same detail**.
+6. The right panel shows all matching moments in class order. **Play this detail**
+   starts one second before the span and pauses at its end. Compare the instruction
+   and use **Edit link** or **Remove link** to correct mistaken associations.
+
+You can select sparse frames for explicitly visual observations or mark an
+interpretation as **Inference · needs review** with an explanatory note. The
+validator checks bounds, registered videos, references, and quoted text, including
+saved transcript corrections. It cannot determine whether two spans teach the same
+concept or whether an observation is true. All associations are labeled user-linked,
+not instructor-verified. Existing enhanced-video exports are available as audio
+choices in both the source player and matching moments.
+
+Class annotations and previous saved versions live in ignored `classes/*.json`.
+Back up that folder along with `runs/`; these are local user data, not committed
+examples. The collection references original run directories rather than copying
+media, so keep those directories available. Selecting the same source twice is
+rejected. Class order is the order passed to `--runs`; ordering does not imply a
+technical follow-up relationship. This first workflow does not automatically infer
+technique transitions or match technical details across recordings.
+
+For the first trial, link two or three details and evaluate: did both timestamps
+land on relevant instruction, did the second explanation add a correction or
+condition, and did any proposed association turn out to be wrong? Actual outcomes
+require your two local recordings; synthetic integration tests do not establish
+semantic accuracy.
+
 ## Status and limits
 
 See [POC_FINDINGS.md](POC_FINDINGS.md) for the initial cloud validation results and

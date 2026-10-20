@@ -34,3 +34,17 @@ SQL limitations are called out at the bottom of the draft. Before production, ad
 cross-video evidence constraints, immutable identity rules, review authorization,
 and robust date precision validation. Use PostgreSQL migrations only after the PoC
 establishes usable transcription and evidence review.
+
+## Class-detail experiment
+
+`class-create` groups existing run directories in teaching order. `class-review`
+adds stable technique and technical-detail identities, plus occurrences referencing
+a video hash, start/end, spoken or visual evidence (or explicit inference), and a
+teaching role. One detail can link to multiple techniques in the storage format;
+the first UI creates a detail under one selected technique. Matching is manual.
+Spoken quotes can refer to original or saved corrected transcript versions.
+Class changes preserve prior document versions separately.
+
+Class order is distinct from a conditional technical transition. Transitions,
+series spanning classes, automatic suggestions, and global technique deduplication
+remain future work. User-linked occurrences are proposals, not instructor verification.

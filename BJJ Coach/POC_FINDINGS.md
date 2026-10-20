@@ -61,3 +61,18 @@ For cloud inference, environment Internet access must allow the public model
 host (`huggingface.co`) and any artifact-host redirects returned by its download
 service. No credentials are required for the selected public model. No network
 configuration, publication, GitHub push, or paid service activation was performed.
+
+## Two-video class-detail workflow added
+
+The manual class review now supports ordered processed recordings, stable technique
+and technical-detail identities, multiple timestamped occurrences of a shared
+detail, teaching roles, evidence basis, saved link edits/removals, and history.
+Playback serves each registered recording locally, with enhanced exports when
+available. There is no automatic semantic matching or automatic visual analysis.
+
+All 17 integration tests passed after this addition. New synthetic two-video
+tests exercise persisted shared-detail links, class order, correction-aware quotes,
+visual/inferred evidence rules, invalid references/bounds, duplicate protection,
+HTTP byte-range playback of each source, and write-token enforcement. JavaScript
+and documentation shell syntax checks also passed. Browser interaction and semantic
+usefulness still require the user's actual two-video trial on their Mac.
